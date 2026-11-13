@@ -3,3 +3,7 @@ bin/
 __pycache__/
 *.log
 dev/
+logs/
+blog/
+blog2/
+*.zip

@@ -1,0 +1,59 @@
+name: build-apk
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 安装系统依赖与 buildozer
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git zip unzip openjdk-17-jdk \
+            autoconf libtool pkg-config zlib1g-dev libncurses5-dev \
+            libncursesw5-dev libtinfo6 cmake libffi-dev libssl-dev
+          pip install --upgrade pip
+          pip install buildozer cython==0.29.36
+
+      - name: 缓存 Android SDK / NDK / Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.buildozer
+            ~/.gradle
+          key: buildozer-${{ hashFiles('buildozer.spec') }}
+          restore-keys: |
+            buildozer-
+
+      - name: 构建 APK
+        run: |
+          set -o pipefail
+          buildozer -v android debug 2>&1 | tee build.log | tail -60
+
+      - name: 构建失败时上传日志
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
+          if-no-files-found: warn
+
+      - name: 上传 APK（在本次运行页面的 Artifacts 里下载）
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk
+          path: bin/*.apk
+          if-no-files-found: error
+          retention-days: 30

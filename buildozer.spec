@@ -27,7 +27,7 @@ icon.filename = icon.png
 #
 android.api = 34
 android.minapi = 24
-android.archs = arm64-v8a, armeabi-v7a
+android.archs = arm64-v8a
 android.accept_sdk_license = True
 android.allow_backup = True
 

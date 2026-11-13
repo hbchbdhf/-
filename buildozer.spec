@@ -37,6 +37,9 @@ android.allow_backup = True
 # 构建时尽量精简
 android.add_src =
 
+# 锁定 python-for-android 版本，避免 master 分支在新 pip/Python 下的打包 bug
+p4a.branch = v2024.01.21
+
 [buildozer]
 # 日志详细程度（云端构建看日志用）
 log_level = 2

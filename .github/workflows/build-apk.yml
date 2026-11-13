@@ -10,6 +10,10 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 120
 
+    env:
+      # 让 p4a 内部 venv 的 pip 停在 24.x，否则会拒绝安装 android 平台标签的 wheel
+      PIP_CONSTRAINT: ${{ github.workspace }}/constraints.txt
+
     steps:
       - name: 检出代码
         uses: actions/checkout@v4

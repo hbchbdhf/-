@@ -1,0 +1,2 @@
+# p4a 内部 venv 用 pip>=25 会拒绝 android 平台标签的 wheel
+pip<25

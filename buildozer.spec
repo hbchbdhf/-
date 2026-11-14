@@ -8,9 +8,10 @@ package.domain = org.liuxuanyu
 
 source.dir = .
 source.include_exts = py,png,ttf,otf
+source.exclude_dirs = bin, .buildozer, vf, logs, blog, blog2, blog3, blog4, __pycache__, .git, .github, build
 
 # 版本号，每次发新版记得 +1
-version = 1.2.0
+version = 1.3.0
 
 # 依赖：python-for-android 的 kivy 配方当前只认 2.3.1，不要乱改
 requirements = python3,kivy==2.3.1
@@ -25,8 +26,8 @@ icon.filename = icon.png
 #
 # Android 配置
 #
-android.api = 34
-android.minapi = 24
+android.api = 33
+android.minapi = 21
 android.archs = arm64-v8a
 android.accept_sdk_license = True
 android.allow_backup = True

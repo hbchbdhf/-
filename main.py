@@ -71,6 +71,9 @@ def _install_crash_hook():
 
 _install_crash_hook()
 
+# 先把上一次的启动记录读进内存，再重置它——否则崩溃现场会被这次启动覆盖。
+_PREV_BOOT = _read_text(_BOOT_LOG)
+
 # 原生崩溃（SIGSEGV 等，发生在 C/SDL 层）Python 的 excepthook 抓不到，
 # 用 faulthandler 把崩溃现场直接 dump 进同一个日志文件。
 try:
@@ -1022,6 +1025,16 @@ class VNApp(App):
         self.root_box = BoxLayout(orientation="vertical")
         Window.bind(on_keyboard=self.on_key)
 
+        # 上次启动没走到"主界面构建完成"（进程被系统杀掉/原生崩溃），
+        # 说明上次是异常退出，把上次的启动记录先贴出来。
+        prev_boot = _PREV_BOOT
+        if prev_boot.strip() and "主界面构建完成" not in prev_boot:
+            _diag("boot: 上次启动未完成，显示上次启动记录")
+            self.root_box.add_widget(
+                DiagView("（上次启动没有正常完成，下面是它走到哪一步）\n\n" + prev_boot,
+                         _read_text(_CRASH_LOG), on_close=self._enter_game))
+            return self.root_box
+
         crash = _read_text(_CRASH_LOG)
         if crash.strip():
             _diag("boot: 发现上次崩溃日志，先显示诊断页")
@@ -1029,8 +1042,24 @@ class VNApp(App):
                 DiagView(crash, _read_text(_BOOT_LOG), on_close=self._enter_game))
             return self.root_box
 
-        self._enter_game()
+        try:
+            self._enter_game()
+        except BaseException:
+            # 关键：不要让它闪退。把异常直接摊在屏幕上，第一次打开就能看到原因。
+            text = traceback.format_exc()
+            try:
+                with open(_CRASH_LOG, "w", encoding="utf-8") as f:
+                    f.write(text)
+            except Exception:
+                pass
+            _diag("CRASH(build): " + text.strip().splitlines()[-1])
+            self.root_box.clear_widgets()
+            self.root_box.add_widget(DiagView(text, _read_text(_BOOT_LOG), on_close=self._noop))
         return self.root_box
+
+    def _noop(self):
+        """诊断页在"报错现场"模式下没有可恢复的操作"""
+        pass
 
     def _enter_game(self):
         try:

@@ -6,12 +6,12 @@ title = 赵の爱恋
 package.name = PopupNovel
 package.domain = org.liuxuanyu
 
-source.dir = .
+source.dir = app
 source.include_exts = py,png,ttf,otf
-source.exclude_dirs = bin, .buildozer, vf, logs, blog, blog2, blog3, blog4, __pycache__, .git, .github, build
+source.exclude_dirs = __pycache__
 
 # 版本号，每次发新版记得 +1
-version = 1.3.0
+version = 1.3.1
 
 # 依赖：python-for-android 的 kivy 配方当前只认 2.3.1，不要乱改
 requirements = python3,kivy==2.3.1
@@ -21,7 +21,7 @@ orientation = portrait
 fullscreen = 0
 
 # 图标（打包时会自动缩放成各尺寸）
-icon.filename = icon.png
+icon.filename = %(source.dir)s/icon.png
 
 #
 # Android 配置

@@ -4,6 +4,7 @@ __pycache__/
 *.log
 dev/
 logs/
-blog/
-blog2/
+blog*/
+sb/
+vf/
 *.zip

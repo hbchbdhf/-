@@ -10,7 +10,7 @@ source.dir = .
 source.include_exts = py,png,ttf,otf
 
 # 版本号，每次发新版记得 +1
-version = 1.1.0
+version = 1.2.0
 
 # 依赖：python-for-android 的 kivy 配方当前只认 2.3.1，不要乱改
 requirements = python3,kivy==2.3.1

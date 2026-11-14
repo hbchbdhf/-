@@ -70,6 +70,16 @@ def _install_crash_hook():
 
 
 _install_crash_hook()
+
+# 原生崩溃（SIGSEGV 等，发生在 C/SDL 层）Python 的 excepthook 抓不到，
+# 用 faulthandler 把崩溃现场直接 dump 进同一个日志文件。
+try:
+    import faulthandler
+    faulthandler.enable(open(_CRASH_LOG, "a", encoding="utf-8"))
+    _diag("boot: faulthandler 已启用")
+except Exception:
+    pass
+
 _diag("boot: 进程启动 (py %s)" % sys.version.split()[0], reset=True)
 
 from kivy.config import Config

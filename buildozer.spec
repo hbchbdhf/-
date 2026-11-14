@@ -1,6 +1,6 @@
 [app]
 # 应用名称（手机桌面上显示的名字）
-title = 弹窗视觉小说
+title = 赵の爱恋
 
 # 包名：装到手机上后的唯一标识，随意但别和别的应用冲突
 package.name = PopupNovel
@@ -10,7 +10,7 @@ source.dir = .
 source.include_exts = py,png,ttf,otf
 
 # 版本号，每次发新版记得 +1
-version = 1.0.0
+version = 1.1.0
 
 # 依赖：python-for-android 的 kivy 配方当前只认 2.3.1，不要乱改
 requirements = python3,kivy==2.3.1

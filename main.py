@@ -15,24 +15,85 @@
 import os
 import random
 import sys
+import time
+import traceback
 
 os.environ.setdefault("KIVY_NO_ARGS", "1")
 
+
+# ============================================================
+#  崩溃诊断
+#  手机上没法看 logcat，所以把启动阶段和异常写进应用私有目录，
+#  下次启动时直接把日志贴在屏幕上（可以截图发出来）。
+# ============================================================
+def _diag_dir():
+    for key in ("ANDROID_PRIVATE", "ANDROID_APP_PATH"):
+        p = os.environ.get(key)
+        if p and os.path.isdir(p):
+            return p
+    return os.path.dirname(os.path.abspath(__file__))
+
+
+_LOG_DIR = _diag_dir()
+_BOOT_LOG = os.path.join(_LOG_DIR, "boot.log")
+_CRASH_LOG = os.path.join(_LOG_DIR, "crash.log")
+
+
+def _diag(msg, reset=False):
+    try:
+        with open(_BOOT_LOG, "w" if reset else "a", encoding="utf-8") as f:
+            f.write("[%s] %s\n" % (time.strftime("%H:%M:%S"), msg))
+    except Exception:
+        pass
+
+
+def _read_text(path, limit=6000):
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            return f.read()[:limit]
+    except Exception:
+        return ""
+
+
+def _install_crash_hook():
+    def hook(exc_type, exc, tb):
+        text = "".join(traceback.format_exception(exc_type, exc, tb))
+        try:
+            with open(_CRASH_LOG, "w", encoding="utf-8") as f:
+                f.write(text)
+        except Exception:
+            pass
+        tail = text.strip().splitlines()[-1] if text.strip() else "?"
+        _diag("CRASH: " + tail)
+
+    sys.excepthook = hook
+
+
+_install_crash_hook()
+_diag("boot: 进程启动 (py %s)" % sys.version.split()[0], reset=True)
+
 from kivy.config import Config
+
+_diag("boot: kivy.config 加载完成")
 
 # 桌面调试时的窗口大小，手机上一律全屏，这几个值不起作用。
 # 高分屏（150%/200% 缩放）下 Kivy 逻辑坐标 = 像素 x 缩放倍数，
 # 所以窗口要按系统 DPI 放大，否则右半边内容会被裁掉。
 _scale = 1.0
-try:
-    import ctypes as _ctypes
-    _ctypes.windll.shcore.SetProcessDpiAwareness(1)
-    _scale = _ctypes.windll.user32.GetDpiForSystem() / 96.0
-except Exception:
-    pass
-Config.set("graphics", "width", str(int(430 * _scale)))
-Config.set("graphics", "height", str(int(780 * _scale)))
-Config.set("graphics", "resizable", "1")
+# 注意：p4a 里 sys.platform 是 'linux'，要用它注入的环境变量判断
+_IS_ANDROID = bool(os.environ.get("ANDROID_ARGUMENT")
+                   or os.environ.get("ANDROID_PRIVATE"))
+if sys.platform == "win32":
+    try:
+        import ctypes as _ctypes
+        _ctypes.windll.shcore.SetProcessDpiAwareness(1)
+        _scale = _ctypes.windll.user32.GetDpiForSystem() / 96.0
+    except Exception:
+        pass
+if not _IS_ANDROID:
+    Config.set("graphics", "width", str(int(430 * _scale)))
+    Config.set("graphics", "height", str(int(780 * _scale)))
+    Config.set("graphics", "resizable", "1")
 
 from kivy.app import App
 from kivy.clock import Clock
@@ -48,7 +109,11 @@ from kivy.uix.scrollview import ScrollView
 from kivy.uix.widget import Widget
 from kivy.graphics import Color, Line, RoundedRectangle
 
+_diag("boot: kivy 控件导入完成")
+
 from game_data import SCENES
+
+_diag("boot: 剧情数据载入，共 %d 个场景" % len(SCENES))
 
 # ============================================================
 #  中文字体：不注册的话安卓上全是方框
@@ -77,13 +142,19 @@ def _find_font():
 _FONT = _find_font()
 if _FONT:
     # 覆盖默认的 Roboto，所有控件（含 kv 默认样式）都会用这套中文字体
-    LabelBase.register(
-        name="Roboto",
-        fn_regular=_FONT,
-        fn_bold=_FONT,
-        fn_italic=_FONT,
-        fn_bolditalic=_FONT,
-    )
+    try:
+        LabelBase.register(
+            name="Roboto",
+            fn_regular=_FONT,
+            fn_bold=_FONT,
+            fn_italic=_FONT,
+            fn_bolditalic=_FONT,
+        )
+        _diag("boot: 注册中文字体 %s" % _FONT)
+    except Exception:
+        _diag("boot: 字体注册失败 %s" % traceback.format_exc().strip().splitlines()[-1])
+else:
+    _diag("boot: 没找到中文字体，可能显示方框")
 
 # ============================================================
 #  配色（与桌面版一致）
@@ -903,23 +974,69 @@ class BattleScreen(Screen):
 # ============================================================
 #  应用
 # ============================================================
+class DiagView(BoxLayout):
+    """把上次崩溃的日志直接贴在屏幕上，方便截图反馈"""
+
+    def __init__(self, crash, boot, on_close, **kw):
+        super().__init__(orientation="vertical", padding=dp(14),
+                         spacing=dp(10), **kw)
+        self.add_widget(make_label("检测到上次启动崩溃", size=17, color=ACCENT,
+                                   bold=True, size_hint_y=None, height=dp(34)))
+        sv = ScrollView(do_scroll_x=False)
+        body = make_label((crash.strip() or "（没有异常记录）")
+                          + "\n\n———————— 启动阶段 ————————\n" + (boot or ""),
+                          size=11, color=TEXT, halign="left", valign="top",
+                          size_hint_y=None)
+        body.bind(texture_size=lambda w, v: setattr(w, "height", v[1]))
+        sv.add_widget(body)
+        self.add_widget(sv)
+
+        btn = FlatButton(text="清除日志，进入游戏", font_size=sp(15), bold=True,
+                         color=rgba(BTN_TEXT), bg_color=rgba(ACCENT),
+                         size_hint_y=None, height=dp(46))
+        btn.bind(on_release=lambda *_: on_close())
+        self.add_widget(btn)
+
+
 class VNApp(App):
     def __init__(self, **kw):
         super().__init__(**kw)
         self.battle_keys = {"win": "win", "lose": "lose", "abort": "pvp"}
 
     def build(self):
-        self.title = "弹窗视觉小说"
+        self.title = "赵の爱恋"
         Window.clearcolor = rgba(BG)
+        _diag("boot: App.build 开始")
+
+        self.sm = None
+        self.root_box = BoxLayout(orientation="vertical")
+        Window.bind(on_keyboard=self.on_key)
+
+        crash = _read_text(_CRASH_LOG)
+        if crash.strip():
+            _diag("boot: 发现上次崩溃日志，先显示诊断页")
+            self.root_box.add_widget(
+                DiagView(crash, _read_text(_BOOT_LOG), on_close=self._enter_game))
+            return self.root_box
+
+        self._enter_game()
+        return self.root_box
+
+    def _enter_game(self):
+        try:
+            if os.path.exists(_CRASH_LOG):
+                os.remove(_CRASH_LOG)
+        except Exception:
+            pass
+        self.root_box.clear_widgets()
 
         self.sm = ScreenManager(transition=FadeTransition(duration=0.12))
         self.novel = NovelScreen(app=self, name="novel")
         self.battle = BattleScreen(app=self, name="battle")
         self.sm.add_widget(self.novel)
         self.sm.add_widget(self.battle)
-
-        Window.bind(on_keyboard=self.on_key)
-        return self.sm
+        self.root_box.add_widget(self.sm)
+        _diag("boot: 主界面构建完成")
 
     # ---------- 剧情 <-> 战斗 ----------
     def start_battle(self, win_key="win", lose_key="lose", abort_key="pvp"):
@@ -965,4 +1082,15 @@ class VNApp(App):
 
 
 if __name__ == "__main__":
-    VNApp().run()
+    try:
+        VNApp().run()
+        _diag("exit: 正常退出")
+    except BaseException:
+        _text = traceback.format_exc()
+        try:
+            with open(_CRASH_LOG, "w", encoding="utf-8") as f:
+                f.write(_text)
+        except Exception:
+            pass
+        _diag("CRASH(main): " + _text.strip().splitlines()[-1])
+        raise
